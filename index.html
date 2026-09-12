@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>คลังสินค้า</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+:root{
+  --primary:#4f46e5; --primary2:#7c3aed;
+  --bg:#f1f5f9; --card:#ffffff; --text:#0f172a; --muted:#64748b;
+  --ok:#059669; --okbg:#d1fae5; --low:#d97706; --lowbg:#fef3c7; --out:#dc2626; --outbg:#fee2e2;
+  --line:#e2e8f0; --radius:18px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Thai","PingFang HK","Helvetica Neue",Arial,sans-serif;
+  background:var(--bg); color:var(--text); padding-bottom:110px; min-height:100vh;
+}
+.app{max-width:620px;margin:0 auto;padding:0 14px}
+
+/* ---------- Header ---------- */
+header{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;border-radius:0 0 26px 26px;padding:22px 18px 64px;position:relative;
+}
+header .logo{font-size:34px}
+header h1{margin:2px 0 0;font-size:24px;font-weight:800;letter-spacing:.3px}
+header .sub{opacity:.85;font-size:13px;margin-top:2px}
+.live{padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.18);font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.live .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;box-shadow:0 0 0 0 rgba(74,222,128,.7);animation:pulse 2s infinite}
+.live.demo{background:rgba(251,146,60,.25)} .live.demo .dot{background:#fbbf24;animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.7)}70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+.headrow{display:flex;justify-content:space-between;align-items:flex-start}
+
+/* ---------- Stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:-38px 0 14px;position:relative;z-index:2}
+.stat{background:var(--card);border-radius:16px;padding:12px 10px;text-align:center;box-shadow:0 4px 14px rgba(15,23,42,.07)}
+.stat .v{font-size:20px;font-weight:800;line-height:1.2}
+.stat .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+.stat .v.green{color:var(--ok)} .stat .v.amber{color:var(--low)} .stat .v.red{color:var(--out)} .stat .v.blue{color:var(--primary)}
+
+/* ---------- Banners ---------- */
+.banner{border-radius:14px;padding:10px 14px;font-size:13px;line-height:1.5;margin:0 0 12px}
+.banner.demo{background:var(--lowbg);color:#92400e;border:1px solid #fcd34d}
+.banner.err{background:var(--outbg);color:#991b1b;border:1px solid #fca5a5;display:none}
+.banner b{cursor:pointer;text-decoration:underline}
+
+/* ---------- Toolbar ---------- */
+.toolbar{display:flex;gap:8px;margin:14px 0 10px;align-items:center}
+.searchwrap{flex:1;position:relative}
+.searchwrap input{
+  width:100%;padding:11px 14px 11px 38px;border:1px solid var(--line);border-radius:99px;
+  font-size:15px;background:var(--card);outline:none;
+}
+.searchwrap .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.45;font-size:14px}
+.iconbtn{
+  border:1px solid var(--line);background:var(--card);border-radius:99px;width:42px;height:42px;
+  font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex-shrink:0;border:1px solid var(--line);background:var(--card);color:var(--muted);
+  padding:7px 14px;border-radius:99px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap;
+}
+.chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.sortrow{display:flex;justify-content:space-between;align-items:center;margin:2px 2px 10px}
+.sortrow label{font-size:12.5px;color:var(--muted)}
+.sortrow select{border:1px solid var(--line);border-radius:99px;background:var(--card);padding:6px 10px;font-size:13px;color:var(--text);outline:none}
+
+/* ---------- Product cards ---------- */
+.pcard{
+  background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:10px;
+  box-shadow:0 2px 10px rgba(15,23,42,.05);display:flex;gap:12px;align-items:center;cursor:pointer;
+  border:1px solid rgba(226,232,240,.6);transition:transform .1s;
+}
+.pcard:active{transform:scale(.985)}
+.pico{
+  width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f5f3ff);
+  display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0;
+}
+.pinfo{flex:1;min-width:0}
+.pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
+.pprice{font-size:13px;color:var(--primary);font-weight:700;margin-top:3px}
+.pmeta{font-size:11px;color:var(--muted);margin-top:2px}
+.pstock{text-align:right;flex-shrink:0}
+.pstock .qty{font-size:20px;font-weight:800;line-height:1.1}
+.pstock .unit{font-size:11px;color:var(--muted);display:block;text-align:right;margin-top:1px}
+.pstock .pill{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 8px;margin-top:5px}
+.pill.ok{background:var(--okbg);color:var(--ok)} .pill.low{background:var(--lowbg);color:var(--low)} .pill.out{background:var(--outbg);color:var(--out)}
+.adjbtns{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.adjbtns button{
+  width:34px;height:34px;border-radius:10px;border:none;font-size:17px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.adjbtns .minus{background:#e879f9}
+.adjbtns .plus{background:var(--ok)}
+
+/* ---------- Empty / loading ---------- */
+.empty{text-align:center;padding:46px 20px;color:var(--muted)}
+.empty .big{font-size:52px;margin-bottom:10px}
+.empty p{margin:4px 0;font-size:14px}
+.loading{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+.spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--primary);border-radius:50%;margin:0 auto 10px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- FAB ---------- */
+#fab{
+  position:fixed;right:max(16px,calc(50% - 294px));bottom:22px;z-index:40;
+  width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;font-size:30px;
+  box-shadow:0 8px 22px rgba(79,70,229,.45);display:flex;align-items:center;justify-content:center;
+}
+
+/* ---------- Sheets ---------- */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:50;opacity:0;pointer-events:none;transition:opacity .22s}
+.overlay.show{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(105%);bottom:0;z-index:51;width:100%;max-width:620px;
+  background:var(--card);border-radius:24px 24px 0 0;padding:10px 20px calc(24px + env(safe-area-inset-bottom));
+  transition:transform .26s cubic-bezier(.32,.72,.35,1);max-height:88vh;overflow-y:auto;
+}
+.sheet.show{transform:translateX(-50%) translateY(0)}
+.grip{width:42px;height:5px;border-radius:99px;background:var(--line);margin:6px auto 14px}
+.sheet h2{margin:0 0 16px;font-size:19px;font-weight:800}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.field input,.field select{
+  width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:12px;font-size:15.5px;
+  outline:none;background:#f8fafc;color:var(--text);font-family:inherit;
+}
+.field input:focus{border-color:var(--primary);background:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btnrow{display:flex;gap:10px;margin-top:20px}
+.btn{
+  flex:1;border:none;border-radius:14px;padding:14px;font-size:15.5px;font-weight:700;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;
+}
+.btn.ghost{background:#f1f5f9;color:var(--text)}
+.btn.danger{background:var(--outbg);color:var(--out)}
+.hist-item{display:flex;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);align-items:flex-start}
+.hist-item:last-child{border-bottom:none}
+.hist-item .e{font-size:19px;width:26px;flex-shrink:0;text-align:center;margin-top:1px}
+.hist-item .d{flex:1;font-size:13.5px;line-height:1.45}
+.hist-item .t{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ---------- Toast ---------- */
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(80px);bottom:96px;z-index:99;
+  background:#0f172a;color:#fff;padding:10px 18px;border-radius:99px;font-size:13.5px;font-weight:600;
+  opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headrow">
+    <div>
+      <div class="logo">📦</div>
+      <h1>คลังสินค้า</h1>
+      <div class="sub">แอพสต็อกสินค้า — แก้ไขได้แบบเรียลไทม์ทุกเครื่อง</div>
+    </div>
+    <div style="text-align:right">
+      <span class="live" id="liveBadge"><span class="dot"></span><span id="liveTxt">เชื่อมต่อ…</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+  <div class="stats">
+    <div class="stat"><div class="v blue" id="stTotal">0</div><div class="l">รายการสินค้า</div></div>
+    <div class="stat"><div class="v green" id="stQty">0</div><div class="l">คงเหลือรวม</div></div>
+    <div class="stat"><div class="v amber" id="stLow">0</div><div class="l">น่าเติม/หมด</div></div>
+  </div>
+
+  <div class="banner demo" id="demoBanner" style="display:none">
+    🧪 <b>โหมดตัวอย่าง</b> — ข้อมูลเก็บในเครื่องนี้เท่านั้น ยังไม่ได้ต่อ Firebase
+    (ดูวิธีเชื่อมต่อจริงใน <b>คู่มือติดตั้ง.md</b>)
+  </div>
+  <div class="banner err" id="errBanner">
+    ⚠️ <span id="errTxt">เชื่อมต่อฐานข้อมูลไม่ได้</span> — เช็คเน็ตหรือตรวจคีย์ใน firebase-config.js อีกครั้ง
+  </div>
+
+  <div class="toolbar">
+    <div class="searchwrap">
+      <span class="ic">🔍</span>
+      <input id="q" type="search" placeholder="ค้นหาสินค้า…" autocomplete="off">
+    </div>
+    <button class="iconbtn" id="histBtn" title="ประวัติการแก้ไข">🕓</button>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="sortrow">
+    <label id="resultCount"></label>
+    <select id="sort">
+      <option value="recent">ล่าสุดที่แก้ไข</option>
+      <option value="name">ชื่อสินค้า</option>
+      <option value="stock">สต็อกน้อยสุด</option>
+      <option value="price">ราคาต่ำสุด</option>
+    </select>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<button id="fab" title="เพิ่มสินค้า">+</button>
+
+<!-- Sheet: form -->
+<div class="overlay" id="ovForm"></div>
+<div class="sheet" id="sheetForm">
+  <div class="grip"></div>
+  <h2 id="formTitle">➕ เพิ่มสินค้าใหม่</h2>
+  <div class="field"><label>ชื่อสินค้า *</label><input id="fName" placeholder="เช่น น้ำดื่ม 600ml" autocomplete="off"></div>
+  <div class="row2">
+    <div class="field"><label>หมวดหมู่</label><input id="fCat" list="catList" placeholder="เครื่องดื่ม, ของใช้…" autocomplete="off">
+      <datalist id="catList"></datalist>
+    </div>
+    <div class="field"><label>หน่วย</label><input id="fUnit" list="unitList" value="ชิ้น" autocomplete="off">
+      <datalist id="unitList">
+        <option value="ชิ้น"><option value="ขวด"><option value="กล่อง"><option value="ถุง">
+        <option value="แพ็ค"><option value="ลัง"><option value="กิโลกรัม"><option value="ลิตร">
+      </datalist>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>ราคา (บาท)</label><input id="fPrice" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>
+    <div class="field"><label>จำนวนคงเหลือ</label><input id="fStock" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>เกณฑ์แจ้ง "น่าเติม"</label><input id="fLow" type="number" inputmode="numeric" min="0" value="5"></div>
+    <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input id="fNote" placeholder="—" autocomplete="off"></div>
+  </div>
+  <div class="btnrow">
+    <button class="btn danger" id="btnDel" style="display:none;flex:0 0 88px">ลบ</button>
+    <button class="btn ghost" id="btnCancel">ยกเลิก</button>
+    <button class="btn" id="btnSave">💾 บันทึก</button>
+  </div>
+</div>
+
+<!-- Sheet: history -->
+<div class="overlay" id="ovHist"></div>
+<div class="sheet" id="sheetHist">
+  <div class="grip"></div>
+  <h2>🕓 ประวัติการแก้ไข (เรียลไทม์)</h2>
+  <div id="histList"></div>
+  <div class="btnrow"><button class="btn ghost" id="histClose">ปิด</button></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------- ตรวจว่าใส่คีย์ Firebase จริงหรือยัง ----------
+var cfg = window.FIREBASE_CONFIG || {};
+var isFirestore = !!(cfg.apiKey && String(cfg.apiKey).indexOf('AIza') === 0 &&
+                     cfg.projectId && cfg.projectId !== 'your-project-id');
+
+var db = null, S = null, products = [], logs = [], unsubs = [];
+var q = '', cat = 'ทั้งหมด', sortBy = 'recent', editingId = null, loadedOnce = false;
+
+var $ = function(id){ return document.getElementById(id); };
+var fmtMoney = function(n){ return '฿' + Number(n||0).toLocaleString('en-US', {maximumFractionDigits:2}); };
+var fmtNum = function(n){
+  var x = Number(n||0);
+  return x % 1 === 0 ? x.toLocaleString('en-US') : x.toLocaleString('en-US', {maximumFractionDigits:2});
+};
+var fmtTime = function(t){
+  if(!t) return '';
+  var d = t.toDate ? t.toDate() : new Date(t);
+  return d.toLocaleString('th-TH', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+};
+var toast = function(msg){
+  var el = $('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ el.classList.remove('show'); }, 2200);
+};
+
+// ==================== 🔥 Firestore store ====================
+function createFirestoreStore(){
+  var app = firebase.initializeApp(cfg);
+  db = firebase.firestore(app);
+  // เปิด offline cache (compat API: enablePersistence)
+  db.enablePersistence().catch(function(e){
+    if(e.code !== 'failed-precondition' && e.code !== 'unimplemented') console.warn('persistence:', e);
+  });
+  var ts = firebase.firestore.FieldValue.serverTimestamp();
+  var inc = firebase.firestore.FieldValue.increment;
+
+  db.collection('products').orderBy('updatedAt','desc').onSnapshot(function(snap){
+    products = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    loadedOnce = true; renderAll();
+  }, function(err){ showConnError(err); });
+
+  db.collection('logs').orderBy('at','desc').limit(80).onSnapshot(function(snap){
+    logs = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    if(loadedOnce) renderAll();
+  }, function(){});
+
+  return {
+    type:'firestore',
+    add: function(p){ return db.collection('products').add(Object.assign({}, p, {createdAt:ts, updatedAt:ts})); },
+    update: function(id, patch){ return db.collection('products').doc(id).update(Object.assign({}, patch, {updatedAt:ts})); },
+    remove: function(id){ return db.collection('products').doc(id).delete(); },
+    adjust: function(id, delta){ return db.collection('products').doc(id).update({stock: inc(delta), updatedAt:ts}); },
+    log: function(action, detail){ return db.collection('logs').add({action:action, detail:detail, at:ts}); },
+    now: function(){ return new Date(); }
+  };
+}
+
+// ==================== 🧪 โหมดตัวอย่าง (localStorage) ====================
+function createDemoStore(){
+  var KEY = 'stock_demo_v1', LKEY = 'stock_demo_logs_v1';
+  var seed = [
+    {name:'น้ำดื่ม 600ml', category:'เครื่องดื่ม', price:15, stock:24, unit:'ขวด', lowStock:12, note:'', createdAt:0, updatedAt:Date.now()},
+    {name:'ข้าวสารหอมมะลิ 5กก.', category:'อาหารแห้ง', price:165, stock:3, unit:'ถุง', lowStock:5, note:'', createdAt:0, updatedAt:Date.now()},
+    {name:'ยาสีฟัน', category:'ของใช้', price:89, stock:0, unit:'หลอด', lowStock:4, note:'', createdAt:0, updatedAt:Date.now()}
+  ];
+  function load(key, def){ try{ var v = JSON.parse(localStorage.getItem(key)); return v===null?def:v; }catch(e){ return def; } }
+  function save(key, v){ localStorage.setItem(key, JSON.stringify(v)); }
+  function uid(){ return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  products = load(KEY, null);
+  logs = load(LKEY, []);
+  if(products === null){
+    products = seed.map(function(s){ return Object.assign({id: uid()}, s); });
+  }
+  // กันสินค้าเก่าที่ไม่มี id (seed เวอร์ชันเก่า) — ใส่ id ให้อัตโนมัติ
+  var needSave = false;
+  products.forEach(function(p){ if(!p.id){ p.id = uid(); needSave = true; } });
+  if(needSave) save(KEY, products);
+
+  function commit(){
+    save(KEY, products); save(LKEY, logs.slice(0,80));
+    renderAll();
+  }
+  function pushLog(a, d){ logs.unshift({action:a, detail:d, at:Date.now()}); logs = logs.slice(0,80); }
+
+  return {
+    type:'demo',
+    add: function(p){
+      p.id = uid(); p.createdAt = Date.now(); p.updatedAt = Date.now();
+      products.unshift(p); pushLog('add', 'เพิ่มสินค้า "' + p.name + '"'); commit();
+      return Promise.resolve();
+    },
+    update: function(id, patch){
+      var p = products.find(function(x){ return x.id === id; }); if(!p) return Promise.resolve();
+      Object.assign(p, patch, {updatedAt: Date.now()}); commit(); return Promise.resolve();
+    },
+    remove: function(id){
+      var p = products.find(function(x){ return x.id === id; });
+      products = products.filter(function(x){ return x.id !== id; });
+      pushLog('remove', 'ลบสินค้า "' + (p ? p.name : '') + '"'); commit();
+      return Promise.resolve();
+    },
+    adjust: function(id, delta){
+      var p = products.find(function(x){ return x.id === id; }); if(!p) return Promise.resolve();
+      var before = p.stock; p.stock = Math.max(0, Number(p.stock)+delta); p.updatedAt = Date.now();
+      pushLog(delta>0?'up':'down', '"' + p.name + '" สต็อก ' + (delta>0?'+':'') + delta +
+        ' (' + fmtNum(before) + ' → ' + fmtNum(p.stock) + ')');
+      commit(); return Promise.resolve();
+    },
+    log: function(action, detail){ pushLog(action, detail); commit(); return Promise.resolve(); },
+    now: function(){ return new Date(); }
+  };
+}
+
+// ==================== UI ====================
+function showConnError(err){
+  $('errTxt').textContent = 'เชื่อมต่อฐานข้อมูลไม่ได้ (' + (err && err.message ? err.message : '') + ')';
+  $('errBanner').style.display = 'block';
+}
+function setLive(demo){
+  var b = $('liveBadge');
+  if(demo){ b.classList.add('demo'); $('liveTxt').textContent = 'โหมดตัวอย่าง'; }
+  else { b.classList.remove('demo'); $('liveTxt').textContent = 'ออนไลน์·สด'; }
+}
+
+function statusOf(p){
+  if(Number(p.stock) <= 0) return 'out';
+  if(Number(p.stock) <= Number(p.lowStock || 0)) return 'low';
+  return 'ok';
+}
+var STATUS_LABEL = {ok:'ปกติ', low:'น่าเติม', out:'หมด'};
+
+function renderChips(){
+  var cats = ['ทั้งหมด'].concat(
+    products.map(function(p){ return p.category; }).filter(Boolean)
+      .filter(function(c, i, a){ return a.indexOf(c) === i; }).sort(function(a,b){ return a.localeCompare(b,'th'); })
+  );
+  var el = $('chips'); el.innerHTML = '';
+  cats.forEach(function(c){
+    var b = document.createElement('button');
+    b.className = 'chip' + (c === cat ? ' active' : '');
+    b.textContent = c;
+    b.onclick = function(){ cat = c; renderAll(); };
+    el.appendChild(b);
+  });
+}
+
+function filtered(){
+  var list = products.filter(function(p){
+    if(cat !== 'ทั้งหมด' && p.category !== cat) return false;
+    if(!q) return true;
+    var hay = (p.name||'') + ' ' + (p.category||'') + ' ' + (p.note||'');
+    return hay.toLowerCase().indexOf(q.toLowerCase()) !== -1;
+  });
+  if(sortBy === 'name') list.sort(function(a,b){ return (a.name||'').localeCompare(b.name||'', 'th'); });
+  else if(sortBy === 'stock') list.sort(function(a,b){ return (Number(a.stock)-Number(b.stock)) || (a.name||'').localeCompare(b.name||'','th'); });
+  else if(sortBy === 'price') list.sort(function(a,b){ return (Number(a.price)-Number(b.price)) || (a.name||'').localeCompare(b.name||'','th'); });
+  else list.sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
+  return list;
+}
+
+function renderList(){
+  var list = filtered(), el = $('list');
+  $('resultCount').textContent = list.length ? 'พบ ' + list.length + ' รายการ' : '';
+  if(!products.length && loadedOnce){
+    el.innerHTML = '<div class="empty"><div class="big">📦</div><p><b>ยังไม่มีสินค้า</b></p><p>กดปุ่ม + ด้านล่างเพื่อเพิ่มสินค้าแรก</p></div>';
+    return;
+  }
+  if(!list.length){
+    el.innerHTML = '<div class="empty"><div class="big">🔍</div><p>ไม่พบสินค้าที่ค้นหา</p></div>';
+    return;
+  }
+  el.innerHTML = '';
+  list.forEach(function(p){
+    var st = statusOf(p);
+    var card = document.createElement('div');
+    card.className = 'pcard';
+    card.innerHTML =
+      '<div class="pico">' + emojiFor(p) + '</div>' +
+      '<div class="pinfo">' +
+        '<div class="pname">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
+        (p.category ? '<span class="pcat">' + esc(p.category) + '</span>' : '') +
+        '<div class="pprice">' + fmtMoney(p.price) + '</div>' +
+        '<div class="pmeta">แก้ไขล่าสุด ' + fmtTime(p.updatedAt) + '</div>' +
+      '</div>' +
+      '<div class="pstock">' +
+        '<span class="qty" style="color:' + ({ok:'var(--ok)',low:'var(--low)',out:'var(--out)'})[st] + '">' + fmtNum(p.stock) + '</span>' +
+        '<span class="unit">' + esc(p.unit || '') + '</span>' +
+        '<span class="pill ' + st + '">' + STATUS_LABEL[st] + '</span>' +
+        '<div class="adjbtns">' +
+          '<button class="minus" data-act="minus" data-id="' + p.id + '">−</button>' +
+          '<button class="plus" data-act="plus" data-id="' + p.id + '">+</button>' +
+        '</div>' +
+      '</div>';
+    card.addEventListener('click', function(e){
+      if(e.target.closest('[data-act]')) return;
+      openEdit(p.id);
+    });
+    el.appendChild(card);
+  });
+}
+
+function emojiFor(p){
+  var c = (p.category || '').replace(/^\s+|\s+$/g,'');
+  var m = {เครื่องดื่ม:'🥤',น้ำ:'💧',อาหาร:'🍚',ขนม:'🍬',ของใช้:'🧻',ยา:'💊',เครื่องสำอาง:'🧴',เครื่องเขียน:'✏️',เครื่องครัว:'🍳',อิเล็กทรอนิกส์:'🔌',เสื้อผ้า:'👕',อื่น:'📦'};
+  for(var k in m) if(c.indexOf(k) !== -1) return m[k];
+  return '📦';
+}
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function renderStats(){
+  var total = products.length;
+  var sum = products.reduce(function(a,p){ return a + Number(p.stock||0); }, 0);
+  var low = products.filter(function(p){ return statusOf(p) !== 'ok'; }).length;
+  $('stTotal').textContent = fmtNum(total);
+  $('stQty').textContent = fmtNum(sum);
+  $('stLow').textContent = fmtNum(low);
+}
+
+function renderHist(){
+  var el = $('histList');
+  if(!logs.length){ el.innerHTML = '<div class="empty"><div class="big">🕓</div><p>ยังไม่มีประวัติการแก้ไข</p></div>'; return; }
+  el.innerHTML = '';
+  var EM = {add:'➕', edit:'✏️', remove:'🗑️', up:'⬆️', down:'⬇️'};
+  logs.forEach(function(l){
+    var d = document.createElement('div');
+    d.className = 'hist-item';
+    d.innerHTML = '<div class="e">' + (EM[l.action]||'•') + '</div>' +
+      '<div class="d">' + esc(l.detail || '') + '<div class="t">' + fmtTime(l.at) + '</div></div>';
+    el.appendChild(d);
+  });
+}
+
+function renderAll(){
+  renderStats(); renderChips(); renderList();
+  if($('sheetHist').classList.contains('show')) renderHist();
+}
+
+// ---------- Sheets ----------
+function setOverlay(id, on){
+  $(id).classList.toggle('show', on);
+  document.body.style.overflow = on ? 'hidden' : '';
+}
+function openSheet(name, on){
+  setOverlay('ov' + name, on);
+  $('sheet' + name).classList.toggle('show', on);
+}
+
+// ---------- Form ----------
+function openAdd(){
+  editingId = null;
+  $('formTitle').textContent = '➕ เพิ่มสินค้าใหม่';
+  $('btnDel').style.display = 'none';
+  $('fName').value = ''; $('fCat').value = ''; $('fPrice').value = ''; $('fStock').value = '';
+  $('fLow').value = 5; $('fNote').value = ''; $('fUnit').value = 'ชิ้น';
+  // อัปเดตรายการหมวดหมู่ที่มีอยู่
+  var cats = products.map(function(p){ return p.category; }).filter(Boolean)
+    .filter(function(c,i,a){ return a.indexOf(c) === i; });
+  $('catList').innerHTML = cats.map(function(c){ return '<option value="' + esc(c) + '">'; }).join('');
+  openSheet('Form', true);
+  setTimeout(function(){ $('fName').focus(); }, 250);
+}
+function openEdit(id){
+  var p = products.find(function(x){ return x.id === id; });
+  if(!p) return;
+  editingId = id;
+  $('formTitle').textContent = '✏️ แก้ไข: ' + p.name;
+  $('btnDel').style.display = '';
+  $('fName').value = p.name || ''; $('fCat').value = p.category || '';
+  $('fPrice').value = p.price == null ? '' : p.price;
+  $('fStock').value = p.stock == null ? '' : p.stock;
+  $('fLow').value = p.lowStock == null ? 5 : p.lowStock;
+  $('fNote').value = p.note || ''; $('fUnit').value = p.unit || 'ชิ้น';
+  openSheet('Form', true);
+}
+
+function collectForm(){
+  var name = $('fName').value.replace(/^\s+|\s+$/g,'');
+  if(!name){ toast('⚠️ ต้องใส่ชื่อสินค้า'); $('fName').focus(); return null; }
+  var data = {
+    name: name,
+    category: $('fCat').value.replace(/^\s+|\s+$/g,''),
+    unit: $('fUnit').value.replace(/^\s+|\s+$/g,'') || 'ชิ้น',
+    price: Math.max(0, parseFloat($('fPrice').value) || 0),
+    stock: Math.max(0, parseFloat($('fStock').value) || 0),
+    lowStock: Math.max(0, parseInt($('fLow').value, 10) || 0),
+    note: $('fNote').value.replace(/^\s+|\s+$/g,'')
+  };
+  return data;
+}
+
+$('btnSave').onclick = function(){
+  var data = collectForm(); if(!data) return;
+  if(editingId){
+    var before = products.find(function(x){ return x.id === editingId; });
+    var diffs = [];
+    if(before){
+      if(before.name !== data.name) diffs.push('ชื่อ "' + before.name + '" → "' + data.name + '"');
+      if(Number(before.price) !== data.price) diffs.push('ราคา ' + fmtMoney(before.price) + ' → ' + fmtMoney(data.price));
+      if(Number(before.stock) !== data.stock) diffs.push('สต็อก ' + fmtNum(before.stock) + ' → ' + fmtNum(data.stock));
+      if(String(before.category||'') !== data.category) diffs.push('หมวดหมู่ ' + (before.category||'-') + ' → ' + (data.category||'-'));
+      if(String(before.unit||'') !== data.unit) diffs.push('หน่วย ' + (before.unit||'-') + ' → ' + (data.unit||'-'));
+      if(Number(before.lowStock) !== data.lowStock) diffs.push('เกณฑ์เติม ' + before.lowStock + ' → ' + data.lowStock);
+      if(String(before.note||'') !== data.note) diffs.push('หมายเหตุ');
+    }
+    S.update(editingId, data).then(function(){
+      if(diffs.length) S.log('edit', 'แก้ไข "' + data.name + '": ' + diffs.join(' · '));
+    }).catch(function(e){ toast('⚠️ บันทึกไม่สำเร็จ'); console.error(e); });
+    toast('✅ บันทึกแล้ว');
+  } else {
+    S.add(data).then(function(){ S.log('add', 'เพิ่มสินค้า "' + data.name + '"'); })
+     .catch(function(e){ toast('⚠️ เพิ่มไม่สำเร็จ'); console.error(e); });
+    toast('✅ เพิ่มสินค้าแล้ว');
+  }
+  openSheet('Form', false);
+};
+
+$('btnCancel').onclick = function(){ openSheet('Form', false); };
+$('ovForm').onclick = function(){ openSheet('Form', false); };
+$('btnDel').onclick = function(){
+  var p = products.find(function(x){ return x.id === editingId; });
+  if(!p) return;
+  if(!confirm('ลบสินค้า "' + p.name + '" แน่นอนไหม? (ลบแล้วกู้คืนไม่ได้)')) return;
+  S.remove(editingId).then(function(){ S.log('remove', 'ลบสินค้า "' + p.name + '"'); })
+   .catch(function(e){ console.error(e); });
+  toast('🗑️ ลบแล้ว');
+  openSheet('Form', false);
+};
+
+// ---------- History ----------
+$('histBtn').onclick = function(){ renderHist(); openSheet('Hist', true); };
+$('histClose').onclick = function(){ openSheet('Hist', false); };
+$('ovHist').onclick = function(){ openSheet('Hist', false); };
+
+// ---------- Quick +/- ----------
+$('list').addEventListener('click', function(e){
+  var btn = e.target.closest('[data-act]');
+  if(!btn) return;
+  e.stopPropagation();
+  var id = btn.getAttribute('data-id');
+  var p = products.find(function(x){ return x.id === id; });
+  if(!p) return;
+  var delta = btn.getAttribute('data-act') === 'plus' ? 1 : -1;
+  if(delta < 0 && Number(p.stock) <= 0){ toast('⚠️ สต็อกเป็น 0 แล้ว'); return; }
+  var before = Number(p.stock);
+  S.adjust(id, delta).then(function(){
+    if(S.type === 'firestore'){ // log ด้วยค่าที่คำนวณจากเครื่องนี้
+      var after = Math.max(0, before + delta);
+      S.log(delta>0?'up':'down', '"' + p.name + '" สต็อก ' + (delta>0?'+':'') + delta + ' (' + fmtNum(before) + ' → ' + fmtNum(after) + ')');
+    }
+  }).catch(function(e){ toast('⚠️ อัปเดตไม่สำเร็จ'); console.error(e); });
+});
+
+// ---------- Search / sort ----------
+var debounce;
+$('q').addEventListener('input', function(e){
+  clearTimeout(debounce);
+  debounce = setTimeout(function(){ q = e.target.value.replace(/^\s+|\s+$/g,''); renderAll(); }, 180);
+});
+$('sort').addEventListener('change', function(e){
+  sortBy = e.target.value === 'stock' ? 'stock' : e.target.value === 'name' ? 'name' : e.target.value === 'price' ? 'price' : 'recent';
+  renderAll();
+});
+
+// ---------- Init ----------
+$('fab').onclick = openAdd;
+window.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ openSheet('Form', false); openSheet('Hist', false); }
+});
+
+if(isFirestore){
+  S = createFirestoreStore();
+  setLive(false);
+  $('demoBanner').style.display = 'none';
+  $('list').innerHTML = '<div class="loading"><div class="spinner"></div>กำลังโหลดข้อมูลสด…</div>';
+} else {
+  S = createDemoStore();
+  setLive(true);
+  $('demoBanner').style.display = '';
+  loadedOnce = true;
+  renderAll();
+}
+})();
+</script>
+</body>
+</html>
