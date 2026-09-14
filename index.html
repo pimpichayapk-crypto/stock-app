@@ -85,8 +85,9 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
 .pcard:active{transform:scale(.985)}
 .pico{
   width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f5f3ff);
-  display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0;overflow:hidden;
 }
+.pico img{width:100%;height:100%;object-fit:cover}
 .pinfo{flex:1;min-width:0}
 .pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
@@ -147,6 +148,11 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
 }
 .btn.ghost{background:#f1f5f9;color:var(--text)}
 .btn.danger{background:var(--outbg);color:var(--out)}
+.btn.sm{padding:10px 14px;font-size:13.5px;border-radius:11px;text-align:center}
+.imgpick{display:flex;align-items:center;gap:12px}
+.imgprev{width:72px;height:72px;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f5f3ff);display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden;flex-shrink:0}
+.imgprev img{width:100%;height:100%;object-fit:cover}
+.imgbtns{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
 .hist-item{display:flex;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);align-items:flex-start}
 .hist-item:last-child{border-bottom:none}
 .hist-item .e{font-size:19px;width:26px;flex-shrink:0;text-align:center;margin-top:1px}
@@ -238,6 +244,17 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
     <div class="field"><label>ราคา (บาท)</label><input id="fPrice" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>
     <div class="field"><label>จำนวนคงเหลือ</label><input id="fStock" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div>
   </div>
+  <div class="field">
+    <label>รูปสินค้า (ไม่บังคับ)</label>
+    <div class="imgpick">
+      <div class="imgprev" id="imgPrev">📦</div>
+      <div class="imgbtns">
+        <button type="button" class="btn ghost sm" id="btnPickImg">📷 เลือก/ถ่ายรูป</button>
+        <button type="button" class="btn ghost sm" id="btnClearImg" style="display:none">🗑 ลบรูป</button>
+        <input type="file" id="fImg" accept="image/*" hidden>
+      </div>
+    </div>
+  </div>
   <div class="row2">
     <div class="field"><label>เกณฑ์แจ้ง "น่าเติม"</label><input id="fLow" type="number" inputmode="numeric" min="0" value="5"></div>
     <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input id="fNote" placeholder="—" autocomplete="off"></div>
@@ -270,7 +287,7 @@ var isFirestore = !!(cfg.apiKey && String(cfg.apiKey).indexOf('AIza') === 0 &&
                      cfg.projectId && cfg.projectId !== 'your-project-id');
 
 var db = null, S = null, products = [], logs = [], unsubs = [];
-var q = '', cat = 'ทั้งหมด', sortBy = 'recent', editingId = null, loadedOnce = false;
+var q = '', cat = 'ทั้งหมด', sortBy = 'recent', editingId = null, loadedOnce = false, imgData = null;
 
 var $ = function(id){ return document.getElementById(id); };
 var fmtMoney = function(n){ return '฿' + Number(n||0).toLocaleString('en-US', {maximumFractionDigits:2}); };
@@ -441,7 +458,7 @@ function renderList(){
     var card = document.createElement('div');
     card.className = 'pcard';
     card.innerHTML =
-      '<div class="pico">' + emojiFor(p) + '</div>' +
+      '<div class="pico">' + (p.image ? '<img src="' + esc(p.image) + '" alt="">' : emojiFor(p)) + '</div>' +
       '<div class="pinfo">' +
         '<div class="pname">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
         (p.category ? '<span class="pcat">' + esc(p.category) + '</span>' : '') +
@@ -514,6 +531,7 @@ function openSheet(name, on){
 // ---------- Form ----------
 function openAdd(){
   editingId = null;
+  imgData = null; resetImgUI();
   $('formTitle').textContent = '➕ เพิ่มสินค้าใหม่';
   $('btnDel').style.display = 'none';
   $('fName').value = ''; $('fCat').value = ''; $('fPrice').value = ''; $('fStock').value = '';
@@ -536,12 +554,17 @@ function openEdit(id){
   $('fStock').value = p.stock == null ? '' : p.stock;
   $('fLow').value = p.lowStock == null ? 5 : p.lowStock;
   $('fNote').value = p.note || ''; $('fUnit').value = p.unit || 'ชิ้น';
+  imgData = null;
+  if(p.image){ $('imgPrev').innerHTML = '<img src="' + esc(p.image) + '" alt="">'; $('btnClearImg').style.display = ''; }
+  else { resetImgUI(); }
   openSheet('Form', true);
 }
 
 function collectForm(){
   var name = $('fName').value.replace(/^\s+|\s+$/g,'');
   if(!name){ toast('⚠️ ต้องใส่ชื่อสินค้า'); $('fName').focus(); return null; }
+  var existingImg = '';
+  if(editingId){ var pp = products.find(function(x){ return x.id === editingId; }); if(pp) existingImg = pp.image || ''; }
   var data = {
     name: name,
     category: $('fCat').value.replace(/^\s+|\s+$/g,''),
@@ -549,7 +572,8 @@ function collectForm(){
     price: Math.max(0, parseFloat($('fPrice').value) || 0),
     stock: Math.max(0, parseFloat($('fStock').value) || 0),
     lowStock: Math.max(0, parseInt($('fLow').value, 10) || 0),
-    note: $('fNote').value.replace(/^\s+|\s+$/g,'')
+    note: $('fNote').value.replace(/^\s+|\s+$/g,''),
+    image: imgData !== null ? imgData : existingImg
   };
   return data;
 }
@@ -591,6 +615,46 @@ $('btnDel').onclick = function(){
   toast('🗑️ ลบแล้ว');
   openSheet('Form', false);
 };
+
+// ---------- รูปสินค้า ----------
+function resetImgUI(){
+  $('imgPrev').innerHTML = '📦';
+  $('btnClearImg').style.display = 'none';
+}
+function addImgUI(src){
+  $('imgPrev').innerHTML = '<img src="' + src + '" alt="">';
+  $('btnClearImg').style.display = '';
+}
+$('btnPickImg').onclick = function(){ $('fImg').click(); };
+$('fImg').onchange = function(e){
+  var f = e.target.files[0];
+  if(!f) return;
+  var done = false;
+  function finish(bitmap){
+    if(done) return; done = true;
+    // บีบอัดให้เล็ก (สูงสุด 400px JPEG) — เก็บลง Firestore ได้รวดเร็ว
+    var MAX = 400, w = bitmap.width, h = bitmap.height;
+    if(w > h && w > MAX){ h = Math.round(h * MAX / w); w = MAX; }
+    else if(h >= w && h > MAX){ w = Math.round(w * MAX / h); h = MAX; }
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    try { if(bitmap.close) bitmap.close(); } catch(e2){}
+    imgData = c.toDataURL('image/jpeg', 0.72);
+    addImgUI(imgData);
+  }
+  function fail(){ if(done) return; done = true; toast('⚠️ อ่านรูปไม่ได้ — ลองเลือกรูปที่เล็กลงหรือรูปใหม่'); }
+  try {
+    createImageBitmap(f).then(finish, function(){
+      // fallback: ใช้ URL object + <img>
+      var url = URL.createObjectURL(f);
+      var im = new Image();
+      im.onload = function(){ try{ URL.revokeObjectURL(url); }catch(e2){} finish(im); };
+      im.onerror = function(){ try{ URL.revokeObjectURL(url); }catch(e2){} fail(); };
+      im.src = url;
+    });
+  } catch(er){ fail(); }
+};
+$('btnClearImg').onclick = function(){ imgData = ''; resetImgUI(); };
 
 // ---------- History ----------
 $('histBtn').onclick = function(){ renderHist(); openSheet('Hist', true); };
