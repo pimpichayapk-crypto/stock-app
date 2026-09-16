@@ -102,6 +102,11 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
 .xls .c-name{display:inline-block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;vertical-align:bottom}
 .xls tfoot td{background:#f8fafc;font-weight:800}
 .xls tfoot td:first-child{color:var(--muted)}
+.xls .qcell{white-space:nowrap;text-align:right;width:74px}
+.xls .qbtn{width:29px;height:29px;border:none;border-radius:8px;font-size:16px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;margin:0 1px;vertical-align:middle}
+.xls .qbtn.minus{background:#fdecef;color:#e5484d}
+.xls .qbtn.plus{background:#e2f6ec;color:#0d9d58}
+.xls .qbtn:active{transform:scale(.88)}
 .pinfo{flex:1;min-width:0}
 .pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
@@ -458,6 +463,20 @@ function filtered(){
   return list;
 }
 
+// ปรับสต็อกไว (ปุ่ม +/− บนหน้าแรก)
+function quickStock(id, delta){
+  var p = products.find(function(x){ return x.id === id; });
+  if(!p) return;
+  if(delta < 0 && Number(p.stock) <= 0){ toast('⚠️ สต็อกเป็น 0 แล้ว'); return; }
+  var before = Number(p.stock);
+  S.adjust(id, delta).then(function(){
+    if(S.type === 'firestore'){
+      var after = Math.max(0, before + delta);
+      S.log(delta > 0 ? 'up' : 'down', '"' + p.name + '" สต็อก ' + (delta > 0 ? '+' : '') + delta + ' (' + fmtNum(before) + ' → ' + fmtNum(after) + ')');
+    }
+  }).catch(function(e){ toast('⚠️ อัปเดตไม่สำเร็จ'); console.error(e); });
+}
+
 function renderList(){
   var list = filtered(), el = $('list');
   $('resultCount').textContent = list.length ? 'พบ ' + list.length + ' รายการ' : '';
@@ -472,7 +491,7 @@ function renderList(){
   el.innerHTML = '';
   var tbl = document.createElement('table');
   tbl.className = 'xls';
-  tbl.innerHTML = '<thead><tr><th>หมวด</th><th>สินค้า</th><th class="r">ราคา</th><th class="r">สต็อก</th></tr></thead>';
+  tbl.innerHTML = '<thead><tr><th>หมวด</th><th>สินค้า</th><th class="r">ราคา</th><th class="r">สต็อก</th><th style="text-align:center;width:74px">±</th></tr></thead>';
   var tbody = document.createElement('tbody');
   list.forEach(function(p){
     var st = statusOf(p);
@@ -482,14 +501,17 @@ function renderList(){
       '<td class="c-cat">' + esc(p.category || '—') + '</td>' +
       '<td><span class="c-name">' + esc(p.name || '') + '</span></td>' +
       '<td class="r">' + fmtMoney(p.price) + '</td>' +
-      '<td class="r" style="font-weight:800;color:' + color + '">' + fmtNum(p.stock) + '</td>';
+      '<td class="r" style="font-weight:800;color:' + color + '">' + fmtNum(p.stock) + '</td>' +
+      '<td class="qcell"><button class="qbtn minus" data-min="1">−</button><button class="qbtn plus" data-plus="1">+</button></td>';
+    tr.querySelector('[data-min]').onclick = function(e){ e.stopPropagation(); e.preventDefault(); quickStock(p.id, -1); };
+    tr.querySelector('[data-plus]').onclick = function(e){ e.stopPropagation(); e.preventDefault(); quickStock(p.id, 1); };
     tr.addEventListener('click', function(){ openEdit(p.id); });
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
   var totalStock = list.reduce(function(a, p){ return a + Number(p.stock || 0); }, 0);
   var tfoot = document.createElement('tfoot');
-  tfoot.innerHTML = '<tr><td colspan="2">รวม ' + list.length + ' รายการ</td><td class="r"></td><td class="r">' + fmtNum(totalStock) + '</td></tr>';
+  tfoot.innerHTML = '<tr><td colspan="3">รวม ' + list.length + ' รายการ</td><td class="r">' + fmtNum(totalStock) + '</td><td></td></tr>';
   tbl.appendChild(tfoot);
   el.appendChild(tbl);
 }
