@@ -92,14 +92,16 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
 .grp-head .gh-ic{font-size:19px;line-height:1}
 .grp-head .gh-count{margin-left:auto;font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-weight:700}
 .chip .cnt{opacity:.75;font-size:11px;margin-left:3px}
-.tbl-head{display:grid;grid-template-columns:1fr auto 54px;gap:10px;padding:9px 4px 6px;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
-.trow{display:grid;grid-template-columns:1fr auto 54px;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
-.trow:active{background:#eef2ff}
-.tn{min-width:0}
-.tn-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tn-cat{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tprice{font-weight:800;color:var(--primary);font-size:14px;text-align:right;white-space:nowrap}
-.tstock{text-align:right;font-size:17px;font-weight:800;line-height:1;white-space:nowrap}
+.xls{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+.xls th{background:#eef2ff;text-align:left;font-size:11px;font-weight:700;color:var(--muted);padding:7px 8px;border:1px solid var(--line);white-space:nowrap}
+.xls td{padding:8px;border:1px solid var(--line);vertical-align:middle}
+.xls tbody tr{cursor:pointer}
+.xls tbody tr:active{background:#f1f5f9}
+.xls th.r,.xls td.r{text-align:right}
+.xls .c-cat{color:var(--muted);font-size:12px;white-space:nowrap}
+.xls .c-name{display:inline-block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;vertical-align:bottom}
+.xls tfoot td{background:#f8fafc;font-weight:800}
+.xls tfoot td:first-child{color:var(--muted)}
 .pinfo{flex:1;min-width:0}
 .pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
@@ -456,20 +458,6 @@ function filtered(){
   return list;
 }
 
-function makeRow(p){
-  var st = statusOf(p);
-  var color = {ok:'var(--ok)', low:'var(--low)', out:'var(--out)'}[st];
-  var row = document.createElement('div');
-  row.className = 'trow';
-  row.innerHTML =
-    '<div class="tn"><div class="tn-name">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
-      (p.category ? '<div class="tn-cat">' + esc(p.category) + '</div>' : '') + '</div>' +
-    '<div class="tprice">' + fmtMoney(p.price) + '</div>' +
-    '<div class="tstock" style="color:' + color + '">' + fmtNum(p.stock) + '</div>';
-  row.addEventListener('click', function(){ openEdit(p.id); });
-  return row;
-}
-
 function renderList(){
   var list = filtered(), el = $('list');
   $('resultCount').textContent = list.length ? 'พบ ' + list.length + ' รายการ' : '';
@@ -482,28 +470,28 @@ function renderList(){
     return;
   }
   el.innerHTML = '';
-  // หัวตาราง (ชื่อสินค้า | ราคา | สต็อก)
-  var th = document.createElement('div');
-  th.className = 'tbl-head';
-  th.innerHTML = '<span>ชื่อสินค้า</span><span style="text-align:right">ราคา</span><span style="text-align:right">สต็อก</span>';
-  el.appendChild(th);
-  if(cat === 'ทั้งหมด'){
-    // จัดกลุ่มตามหมวดหมู่ ให้แต่ละหมวดแยกหัวข้อชัดเจน
-    var order = [];
-    list.forEach(function(p){ var c = p.category || 'อื่น ๆ'; if(order.indexOf(c) === -1) order.push(c); });
-    order.forEach(function(grp){
-      var items = list.filter(function(p){ return (p.category || 'อื่น ๆ') === grp; });
-      var head = document.createElement('div');
-      head.className = 'grp-head';
-      head.innerHTML = '<span class="gh-ic">' + emojiFor({category: grp}) + '</span>' +
-        '<span>' + esc(grp) + '</span>' +
-        '<span class="gh-count">' + items.length + '</span>';
-      el.appendChild(head);
-      items.forEach(function(p){ el.appendChild(makeRow(p)); });
-    });
-  } else {
-    list.forEach(function(p){ el.appendChild(makeRow(p)); });
-  }
+  var tbl = document.createElement('table');
+  tbl.className = 'xls';
+  tbl.innerHTML = '<thead><tr><th>หมวด</th><th>สินค้า</th><th class="r">ราคา</th><th class="r">สต็อก</th></tr></thead>';
+  var tbody = document.createElement('tbody');
+  list.forEach(function(p){
+    var st = statusOf(p);
+    var color = {ok:'var(--ok)', low:'var(--low)', out:'var(--out)'}[st];
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="c-cat">' + esc(p.category || '—') + '</td>' +
+      '<td><span class="c-name">' + esc(p.name || '') + '</span></td>' +
+      '<td class="r">' + fmtMoney(p.price) + '</td>' +
+      '<td class="r" style="font-weight:800;color:' + color + '">' + fmtNum(p.stock) + '</td>';
+    tr.addEventListener('click', function(){ openEdit(p.id); });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  var totalStock = list.reduce(function(a, p){ return a + Number(p.stock || 0); }, 0);
+  var tfoot = document.createElement('tfoot');
+  tfoot.innerHTML = '<tr><td colspan="2">รวม ' + list.length + ' รายการ</td><td class="r"></td><td class="r">' + fmtNum(totalStock) + '</td></tr>';
+  tbl.appendChild(tfoot);
+  el.appendChild(tbl);
 }
 
 function emojiFor(p){
