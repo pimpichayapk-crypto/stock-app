@@ -92,6 +92,14 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
 .grp-head .gh-ic{font-size:19px;line-height:1}
 .grp-head .gh-count{margin-left:auto;font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-weight:700}
 .chip .cnt{opacity:.75;font-size:11px;margin-left:3px}
+.tbl-head{display:grid;grid-template-columns:1fr auto 54px;gap:10px;padding:9px 4px 6px;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
+.trow{display:grid;grid-template-columns:1fr auto 54px;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+.trow:active{background:#eef2ff}
+.tn{min-width:0}
+.tn-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tn-cat{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tprice{font-weight:800;color:var(--primary);font-size:14px;text-align:right;white-space:nowrap}
+.tstock{text-align:right;font-size:17px;font-weight:800;line-height:1;white-space:nowrap}
 .pinfo{flex:1;min-width:0}
 .pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
@@ -448,32 +456,18 @@ function filtered(){
   return list;
 }
 
-function makeCard(p){
+function makeRow(p){
   var st = statusOf(p);
-  var card = document.createElement('div');
-  card.className = 'pcard';
-  card.innerHTML =
-    '<div class="pico">' + (p.image ? '<img src="' + esc(p.image) + '" alt="">' : emojiFor(p)) + '</div>' +
-    '<div class="pinfo">' +
-      '<div class="pname">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
-      (p.category ? '<span class="pcat">' + esc(p.category) + '</span>' : '') +
-      '<div class="pprice">' + fmtMoney(p.price) + '</div>' +
-      '<div class="pmeta">แก้ไขล่าสุด ' + fmtTime(p.updatedAt) + '</div>' +
-    '</div>' +
-    '<div class="pstock">' +
-      '<span class="qty" style="color:' + ({ok:'var(--ok)',low:'var(--low)',out:'var(--out)'})[st] + '">' + fmtNum(p.stock) + '</span>' +
-      '<span class="unit">' + esc(p.unit || '') + '</span>' +
-      '<span class="pill ' + st + '">' + STATUS_LABEL[st] + '</span>' +
-      '<div class="adjbtns">' +
-        '<button class="minus" data-act="minus" data-id="' + p.id + '">−</button>' +
-        '<button class="plus" data-act="plus" data-id="' + p.id + '">+</button>' +
-      '</div>' +
-    '</div>';
-  card.addEventListener('click', function(e){
-    if(e.target.closest('[data-act]')) return;
-    openEdit(p.id);
-  });
-  return card;
+  var color = {ok:'var(--ok)', low:'var(--low)', out:'var(--out)'}[st];
+  var row = document.createElement('div');
+  row.className = 'trow';
+  row.innerHTML =
+    '<div class="tn"><div class="tn-name">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
+      (p.category ? '<div class="tn-cat">' + esc(p.category) + '</div>' : '') + '</div>' +
+    '<div class="tprice">' + fmtMoney(p.price) + '</div>' +
+    '<div class="tstock" style="color:' + color + '">' + fmtNum(p.stock) + '</div>';
+  row.addEventListener('click', function(){ openEdit(p.id); });
+  return row;
 }
 
 function renderList(){
@@ -488,6 +482,11 @@ function renderList(){
     return;
   }
   el.innerHTML = '';
+  // หัวตาราง (ชื่อสินค้า | ราคา | สต็อก)
+  var th = document.createElement('div');
+  th.className = 'tbl-head';
+  th.innerHTML = '<span>ชื่อสินค้า</span><span style="text-align:right">ราคา</span><span style="text-align:right">สต็อก</span>';
+  el.appendChild(th);
   if(cat === 'ทั้งหมด'){
     // จัดกลุ่มตามหมวดหมู่ ให้แต่ละหมวดแยกหัวข้อชัดเจน
     var order = [];
@@ -500,10 +499,10 @@ function renderList(){
         '<span>' + esc(grp) + '</span>' +
         '<span class="gh-count">' + items.length + '</span>';
       el.appendChild(head);
-      items.forEach(function(p){ el.appendChild(makeCard(p)); });
+      items.forEach(function(p){ el.appendChild(makeRow(p)); });
     });
   } else {
-    list.forEach(function(p){ el.appendChild(makeCard(p)); });
+    list.forEach(function(p){ el.appendChild(makeRow(p)); });
   }
 }
 
