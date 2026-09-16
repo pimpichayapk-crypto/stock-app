@@ -88,6 +88,10 @@ header .sub{opacity:.85;font-size:13px;margin-top:2px}
   display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0;overflow:hidden;
 }
 .pico img{width:100%;height:100%;object-fit:cover}
+.grp-head{display:flex;align-items:center;gap:8px;margin:14px 0 6px;padding:0 4px;font-weight:800;font-size:15.5px;color:var(--text)}
+.grp-head .gh-ic{font-size:19px;line-height:1}
+.grp-head .gh-count{margin-left:auto;font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-weight:700}
+.chip .cnt{opacity:.75;font-size:11px;margin-left:3px}
 .pinfo{flex:1;min-width:0}
 .pname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .pcat{font-size:11px;color:var(--muted);background:var(--bg);border-radius:6px;padding:2px 7px;margin-top:3px;display:inline-block}
@@ -412,6 +416,8 @@ function statusOf(p){
 }
 var STATUS_LABEL = {ok:'ปกติ', low:'น่าเติม', out:'หมด'};
 
+function countIn(c){ return products.filter(function(p){ return (p.category||'') === c; }).length; }
+
 function renderChips(){
   var cats = ['ทั้งหมด'].concat(
     products.map(function(p){ return p.category; }).filter(Boolean)
@@ -421,7 +427,8 @@ function renderChips(){
   cats.forEach(function(c){
     var b = document.createElement('button');
     b.className = 'chip' + (c === cat ? ' active' : '');
-    b.textContent = c;
+    var cnt = c === 'ทั้งหมด' ? products.length : countIn(c);
+    b.innerHTML = esc(c) + '<span class="cnt">' + cnt + '</span>';
     b.onclick = function(){ cat = c; renderAll(); };
     el.appendChild(b);
   });
@@ -441,6 +448,34 @@ function filtered(){
   return list;
 }
 
+function makeCard(p){
+  var st = statusOf(p);
+  var card = document.createElement('div');
+  card.className = 'pcard';
+  card.innerHTML =
+    '<div class="pico">' + (p.image ? '<img src="' + esc(p.image) + '" alt="">' : emojiFor(p)) + '</div>' +
+    '<div class="pinfo">' +
+      '<div class="pname">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
+      (p.category ? '<span class="pcat">' + esc(p.category) + '</span>' : '') +
+      '<div class="pprice">' + fmtMoney(p.price) + '</div>' +
+      '<div class="pmeta">แก้ไขล่าสุด ' + fmtTime(p.updatedAt) + '</div>' +
+    '</div>' +
+    '<div class="pstock">' +
+      '<span class="qty" style="color:' + ({ok:'var(--ok)',low:'var(--low)',out:'var(--out)'})[st] + '">' + fmtNum(p.stock) + '</span>' +
+      '<span class="unit">' + esc(p.unit || '') + '</span>' +
+      '<span class="pill ' + st + '">' + STATUS_LABEL[st] + '</span>' +
+      '<div class="adjbtns">' +
+        '<button class="minus" data-act="minus" data-id="' + p.id + '">−</button>' +
+        '<button class="plus" data-act="plus" data-id="' + p.id + '">+</button>' +
+      '</div>' +
+    '</div>';
+  card.addEventListener('click', function(e){
+    if(e.target.closest('[data-act]')) return;
+    openEdit(p.id);
+  });
+  return card;
+}
+
 function renderList(){
   var list = filtered(), el = $('list');
   $('resultCount').textContent = list.length ? 'พบ ' + list.length + ' รายการ' : '';
@@ -453,33 +488,23 @@ function renderList(){
     return;
   }
   el.innerHTML = '';
-  list.forEach(function(p){
-    var st = statusOf(p);
-    var card = document.createElement('div');
-    card.className = 'pcard';
-    card.innerHTML =
-      '<div class="pico">' + (p.image ? '<img src="' + esc(p.image) + '" alt="">' : emojiFor(p)) + '</div>' +
-      '<div class="pinfo">' +
-        '<div class="pname">' + esc(p.name || 'ไม่ระบุชื่อ') + '</div>' +
-        (p.category ? '<span class="pcat">' + esc(p.category) + '</span>' : '') +
-        '<div class="pprice">' + fmtMoney(p.price) + '</div>' +
-        '<div class="pmeta">แก้ไขล่าสุด ' + fmtTime(p.updatedAt) + '</div>' +
-      '</div>' +
-      '<div class="pstock">' +
-        '<span class="qty" style="color:' + ({ok:'var(--ok)',low:'var(--low)',out:'var(--out)'})[st] + '">' + fmtNum(p.stock) + '</span>' +
-        '<span class="unit">' + esc(p.unit || '') + '</span>' +
-        '<span class="pill ' + st + '">' + STATUS_LABEL[st] + '</span>' +
-        '<div class="adjbtns">' +
-          '<button class="minus" data-act="minus" data-id="' + p.id + '">−</button>' +
-          '<button class="plus" data-act="plus" data-id="' + p.id + '">+</button>' +
-        '</div>' +
-      '</div>';
-    card.addEventListener('click', function(e){
-      if(e.target.closest('[data-act]')) return;
-      openEdit(p.id);
+  if(cat === 'ทั้งหมด'){
+    // จัดกลุ่มตามหมวดหมู่ ให้แต่ละหมวดแยกหัวข้อชัดเจน
+    var order = [];
+    list.forEach(function(p){ var c = p.category || 'อื่น ๆ'; if(order.indexOf(c) === -1) order.push(c); });
+    order.forEach(function(grp){
+      var items = list.filter(function(p){ return (p.category || 'อื่น ๆ') === grp; });
+      var head = document.createElement('div');
+      head.className = 'grp-head';
+      head.innerHTML = '<span class="gh-ic">' + emojiFor({category: grp}) + '</span>' +
+        '<span>' + esc(grp) + '</span>' +
+        '<span class="gh-count">' + items.length + '</span>';
+      el.appendChild(head);
+      items.forEach(function(p){ el.appendChild(makeCard(p)); });
     });
-    el.appendChild(card);
-  });
+  } else {
+    list.forEach(function(p){ el.appendChild(makeCard(p)); });
+  }
 }
 
 function emojiFor(p){
